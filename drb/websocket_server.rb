@@ -64,13 +64,14 @@ module DRb
 
       def setup_websock(uri)
         u = URI.parse(uri)
-        callback = Callback.new(self)
 
         app = lambda do |env|
           if Faye::WebSocket.websocket?(env)
             ws = Faye::WebSocket.new(env)
 
             ws.on :message do |event|
+              callback = Callback.new(self)
+              @queue.push(callback)
               res = callback.recv_mesg(event.data.pack('C*'))
               ws.send res.bytes
             end
@@ -80,7 +81,6 @@ module DRb
             end
 
             @ws = ws
-            @queue.push(callback)
 
             # Return async Rack response
             ws.rack_response
