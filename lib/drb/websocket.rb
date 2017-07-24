@@ -1,3 +1,4 @@
+require "drb/websocket/version"
 require 'drb/drb'
 require 'uri'
 require 'eventmachine'
