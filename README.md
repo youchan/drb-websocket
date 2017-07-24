@@ -5,12 +5,22 @@ A druby protocol of WebSocket
 
 This is experimental implementation of druby protocol with WebSocket.
 
+Installation
+=====
+
+    gem install drb-websocket
+
 How to run
 =====
 
+    cd example
+    bundle install
+
 run server
-    ruby -I . server.rb
+
+    bundle exec ruby -I. server.rb
 
 run client
-    ruby -I . client.rb
+
+    bundle exec ruby -I. client.rb
 
