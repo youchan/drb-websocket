@@ -2,6 +2,7 @@ require 'drb/drb'
 require 'drb/websocket'
 require 'thread'
 require 'rack'
+require 'thin'
 require 'faye/websocket'
 
 module DRb
@@ -63,6 +64,9 @@ module DRb
       end
 
       def setup_websock(uri)
+        Faye::WebSocket.load_adapter('thin')
+        thin = Rack::Handler.get('thin')
+
         u = URI.parse(uri)
 
         app = lambda do |env|
@@ -91,7 +95,7 @@ module DRb
         end
 
         Thread.new do
-          Rack::Server.start app: app, Host: u.host, Port: u.port
+          thin.run(app, Host: u.host, Port: u.port)
         end.run
       end
     end
