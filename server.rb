@@ -1,6 +1,5 @@
 require 'drb/drb'
 require 'drb/websocket_server'
-require 'drb/http0serv'
 
 class SampleObject
   def test
