@@ -1,4 +1,5 @@
 require 'drb/drb'
+require_relative './rack_app'
 require 'drb/websocket'
 require 'thread'
 require 'rack'
@@ -46,7 +47,11 @@ module DRb
         @uri = uri
         @config = config
         @queue = Thread::Queue.new
-        setup_websock(uri)
+
+        Faye::WebSocket.load_adapter('thin')
+
+        u = URI.parse(uri)
+        RackApp.register("#{u.host}:#{u.port}", self)
       end
 
       def close
@@ -63,40 +68,10 @@ module DRb
         ServerSide.new(client, @config, uri)
       end
 
-      def setup_websock(uri)
-        Faye::WebSocket.load_adapter('thin')
-        thin = Rack::Handler.get('thin')
-
-        u = URI.parse(uri)
-
-        app = lambda do |env|
-          if Faye::WebSocket.websocket?(env)
-            ws = Faye::WebSocket.new(env)
-
-            ws.on :message do |event|
-              callback = Callback.new(self)
-              @queue.push(callback)
-              res = callback.recv_mesg(event.data.pack('C*'))
-              ws.send res.bytes
-            end
-
-            ws.on :close do |event|
-              ws = nil
-            end
-
-            @ws = ws
-
-            # Return async Rack response
-            ws.rack_response
-          else
-            # Normal HTTP request
-            [400, {}, []]
-          end
-        end
-
-        Thread.new do
-          thin.run(app, Host: u.host, Port: u.port)
-        end.run
+      def on_message(data)
+        callback = Callback.new(self)
+        @queue.push(callback)
+        callback.recv_mesg(data.pack('C*'))
       end
     end
 
