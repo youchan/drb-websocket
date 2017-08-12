@@ -55,8 +55,8 @@ module DRb
       end
 
       def close
-        @ws.close if @ws
-        @ws = nil
+        u = URI.parse(@uri)
+        RackApp.close("#{u.host}:#{u.port}")
       end
 
       def push(callback)
