@@ -70,7 +70,6 @@ module DRb
 
       def on_message(data)
         callback = Callback.new(self)
-        @queue.push(callback)
         callback.recv_mesg(data.pack('C*'))
       end
     end
