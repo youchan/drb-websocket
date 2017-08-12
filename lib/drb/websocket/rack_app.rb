@@ -40,6 +40,7 @@ module DRb
           end
 
           ws.on :close do |event|
+            RackApp.close(key)
             ws = nil
           end
 
