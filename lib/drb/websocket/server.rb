@@ -52,6 +52,14 @@ module DRb
 
         u = URI.parse(uri)
         RackApp.register("#{u.host}:#{u.port}", self)
+
+        if RackApp.config.standalone
+          Thread.new do
+            app = RackApp.new(-> { [400, {}, []] })
+            thin = Rack::Handler.get('thin')
+            thin.run(app, Host: u.host, Port: u.port)
+          end.run
+        end
       end
 
       def close

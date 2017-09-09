@@ -3,6 +3,7 @@ module DRb
     class RackApp
       def initialize(app)
         @app = app
+        RackApp.config.use_rack = true
       end
 
       @servers = {}
@@ -48,6 +49,24 @@ module DRb
           ws.rack_response
         else
           @app.call(env)
+        end
+      end
+
+      def self.config
+        @config ||= Config.new
+        yield @config if block_given?
+        @config
+      end
+
+      class Config
+        attr_reader :standalone
+
+        def initialize
+          @standalone = true
+        end
+
+        def use_rack=(flag)
+          @standalone = !flag
         end
       end
     end
