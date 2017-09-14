@@ -6,42 +6,44 @@ module DRb
         RackApp.config.use_rack = true
       end
 
-      @servers = {}
-      @ws = {}
+      @handlers = {}
+      @sockets = {}
 
-      def self.server(key)
-        @servers[key]
+      def self.handler(key)
+        @handlers[key]
       end
 
-      def self.ws
-        @ws
+      def self.sockets
+        @sockets
       end
 
       def self.close(key)
-        if @ws.has_key?(key)
-          @ws[key].close
-          @ws.delete(key)
+        if @sockets.has_key?(key)
+          @sockets[key].close
+          @sockets.delete(key)
         end
       end
 
-      def self.register(key, server)
-        @servers[key] = server
+      def self.register(key, handler)
+        @handlers[key] = handler
       end
 
       def call(env)
         if Faye::WebSocket.websocket?(env)
           ws = Faye::WebSocket.new(env)
           req = Rack::Request.new(env)
-          key = "#{req.host}:#{req.port}"
-          RackApp.ws[key] = ws
+          uri = "ws://#{req.host}:#{req.port}#{req.path == '/' ? nil : req.path}"
+          RackApp.sockets[uri] = ws
 
           ws.on :message do |event|
-            res = RackApp.server(key).on_message(event.data)
-            ws.send res.bytes
+            Thread.new do
+              res = RackApp.handler(uri).on_message(event.data)
+              ws.send(res.bytes) if res
+            end.run
           end
 
           ws.on :close do |event|
-            RackApp.close(key)
+            RackApp.close(uri)
             ws = nil
           end
 
@@ -59,7 +61,7 @@ module DRb
       end
 
       class Config
-        attr_reader :standalone
+        attr_reader :standalone, :callback_url
 
         def initialize
           @standalone = true
@@ -67,6 +69,10 @@ module DRb
 
         def use_rack=(flag)
           @standalone = !flag
+        end
+
+        def callback_url=(url)
+          @callback_url = url
         end
       end
     end

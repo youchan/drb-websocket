@@ -10,9 +10,9 @@ module DRb
   module WebSocket
 
     def self.open_server(uri, config)
-      unless uri =~ /^ws:\/\/(.*?):(\d+)(\?(.*))?$/
+      unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
-        raise(DRbBadURI, 'can\'t parse uri:' + uri)
+        raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
       Server.new(uri, config)
     end
@@ -51,7 +51,7 @@ module DRb
         Faye::WebSocket.load_adapter('thin')
 
         u = URI.parse(uri)
-        RackApp.register("#{u.host}:#{u.port}", self)
+        RackApp.register(uri, self)
 
         if RackApp.config.standalone
           Thread.new do
