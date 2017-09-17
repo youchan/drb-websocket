@@ -63,8 +63,7 @@ module DRb
       end
 
       def close
-        u = URI.parse(@uri)
-        RackApp.close("#{u.host}:#{u.port}")
+        RackApp.close(@uri)
       end
 
       def push(callback)
@@ -72,13 +71,18 @@ module DRb
       end
 
       def accept
-        client = @queue.pop
-        ServerSide.new(client, @config, uri)
+        callback = @queue.pop
+        ServerSide.new(callback, @config, uri)
       end
 
       def on_message(data)
         callback = Callback.new(self)
-        callback.recv_mesg(data.pack('C*'))
+        res = callback.recv_mesg(data.pack('C*'))
+        @ws.send(res.bytes)
+      end
+
+      def on_session_start(ws)
+        @ws = ws
       end
     end
 

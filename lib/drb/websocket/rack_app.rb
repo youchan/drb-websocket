@@ -7,20 +7,14 @@ module DRb
       end
 
       @handlers = {}
-      @sockets = {}
 
       def self.handler(key)
         @handlers[key]
       end
 
-      def self.sockets
-        @sockets
-      end
-
       def self.close(key)
-        if @sockets.has_key?(key)
-          @sockets[key].close
-          @sockets.delete(key)
+        if @handlers.has_key?(key)
+          @handlers.delete(key)
         end
       end
 
@@ -33,17 +27,18 @@ module DRb
           ws = Faye::WebSocket.new(env)
           req = Rack::Request.new(env)
           uri = "ws://#{req.host}:#{req.port}#{req.path == '/' ? nil : req.path}"
-          RackApp.sockets[uri] = ws
+
+          handler = req.path.start_with?('/callback') ? RackApp.register(uri, CallbackHandler.new(uri)) : RackApp.handler(uri)
+          handler.on_session_start(ws)
 
           ws.on :message do |event|
-            Thread.new do
-              res = RackApp.handler(uri).on_message(event.data)
-              ws.send(res.bytes) if res
-            end.run
+            handler.on_message(event.data)
           end
 
           ws.on :close do |event|
-            RackApp.close(uri)
+            if CallbackHandler === handler
+              RackApp.close(uri)
+            end
             ws = nil
           end
 

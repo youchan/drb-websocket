@@ -35,16 +35,14 @@ module DRb
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
 
-      path = $4
+      path, uuid = $4.split('/')
 
-      callback_handler = nil
-      if path == 'callback'
-        callback_handler = CallbackHandler.new(uri)
-        RackApp.register(uri, callback_handler)
-      elsif path != nil
+      unless path.nil? || path == 'callback'
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
 
+      handler = RackApp.handler(uri)
+      callback_handler = handler if CallbackHandler === handler
       ClientSide.new(uri, config, callback_handler)
     end
 
@@ -58,15 +56,18 @@ module DRb
         sio = StrStream.new
         sio.write(data.pack('C*'))
         @queue.push sio
-        nil
       end
 
-      def pop
+      def on_session_start(ws)
+        @ws = ws
+      end
+
+      def stream
         @queue.pop
       end
 
-      def send(data)
-        RackApp.sockets[@uri].send(data.bytes)
+      def send(url, data)
+        @ws.send(data.bytes)
       end
     end
 
@@ -78,6 +79,7 @@ module DRb
         @msg = DRbMessage.new(config)
         @proxy = ENV['HTTP_PROXY']
         @handler = handler
+        @queue = Thread::Queue.new
       end
 
       def close
@@ -91,19 +93,22 @@ module DRb
         stream = StrStream.new
         @msg.send_request(stream, ref, msg_id, *arg, &b)
         if @handler
-          @handler.send(stream.buf)
+          @handler.send(@uri, stream.buf)
         else
           send(@uri, stream.buf)
         end
       end
 
       def recv_reply
-        @reply_stream = @handler.pop if @handler
-        begin
-          @msg.recv_reply(@reply_stream)
-        rescue
-          close
-          raise $!
+        Thread.start do
+          @reply_stream = @handler.stream if @handler
+
+          begin
+            @msg.recv_reply(@reply_stream)
+          rescue
+            close
+            raise $!
+          end
         end
       end
 
@@ -113,23 +118,22 @@ module DRb
         path = [(it.path=='' ? '/' : it.path), it.query].compact.join('?')
 
         EM.run do
-          sio = StrStream.new
-          @ws = Faye::WebSocket::Client.new(uri + path)
+          ws = Faye::WebSocket::Client.new(uri + path)
 
-          @ws.on :message do |event|
+          ws.on :message do |event|
+            sio = StrStream.new
             sio.write(event.data.pack('C*'))
 
             if @config[:load_limit] < sio.buf.size
               raise TypeError, 'too large packet'
             end
 
-            @reply_stream = sio
-            @ws.close
+            ws.close
 
             EM.stop
           end
 
-          @ws.send(data.bytes)
+          ws.send(data.bytes)
         end
       end
     end
