@@ -14,27 +14,24 @@ module DRb
       Server.new(uri, config)
     end
 
-    class Callback
-      def initialize(drb)
-        @drb = drb
-        @queue = Thread::Queue.new
+    class Messages
+      def initialize
+        @request_message = Thread::Queue.new
+        @reply_message = Thread::Queue.new
       end
 
-      def recv_mesg(msg)
-        @msg = msg
-        @drb.push(self)
-        @queue.pop
+      def recv_message(message)
+        @request_message.push message
+        @reply_message.pop
       end
 
-      def message
-        @msg
+      def request_message
+        @request_message.pop
       end
 
       def reply(body)
-        @queue.push(body)
+        @reply_message.push(body)
       end
-
-      def close; end
     end
 
     class Server
@@ -60,49 +57,52 @@ module DRb
       end
 
       def close
-        RackApp.close(@uri)
-      end
-
-      def push(callback)
-        @queue.push(callback)
+        @ws.close
+        @ws = nil
       end
 
       def accept
-        callback = @queue.pop
-        ServerSide.new(callback, @config, uri)
+        messages = @queue.pop
+        ServerSide.new(messages, @config, uri)
       end
 
       def on_message(data)
-        callback = Callback.new(self)
-        res = callback.recv_mesg(data.pack('C*'))
-        @ws.send(res.bytes)
       end
 
       def on_session_start(ws)
         @ws = ws
+        messages = Messages.new
+        @ws.on(:message) do |event|
+          Thread.new do
+            res = messages.recv_message(event.data.pack('C*'))
+            @ws.send(res.bytes)
+          end.run
+        end
+        @queue.push(messages)
       end
     end
 
     class ServerSide
       attr_reader :uri
 
-      def initialize(callback, config, uri)
+      def initialize(messages, config, uri)
         @uri = uri
-        @callback = callback
+        @messages = messages
         @config = config
         @msg = DRbMessage.new(@config)
-        @req_stream = StrStream.new(@callback.message)
       end
 
       def close
-        @callback.close if @callback
-        @callback = nil
+        @messages = nil
       end
 
-      def alive?; false; end
+      def alive?
+        !!@messages
+      end
 
       def recv_request
         begin
+          @req_stream = StrStream.new(@messages.request_message)
           @msg.recv_request(@req_stream)
         rescue
           close
@@ -112,10 +112,10 @@ module DRb
 
       def send_reply(succ, result)
         begin
-          return unless @callback
+          return unless alive?
           stream = StrStream.new
           @msg.send_reply(stream, succ, result)
-          @callback.reply(stream.buf)
+          @messages.reply(stream.buf)
         rescue
           close
           raise $!
