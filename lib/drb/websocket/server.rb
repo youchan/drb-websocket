@@ -1,6 +1,3 @@
-require 'drb/drb'
-require_relative './rack_app'
-require 'drb/websocket'
 require 'thread'
 require 'rack'
 require 'thin'
