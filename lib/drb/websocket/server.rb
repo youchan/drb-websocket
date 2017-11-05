@@ -41,6 +41,7 @@ module DRb
         @uri = uri
         @config = config
         @queue = Thread::Queue.new
+        @event_queue = Thread::Queue.new
 
         Faye::WebSocket.load_adapter('thin')
 
@@ -54,6 +55,13 @@ module DRb
             thin.run(app, Host: u.host, Port: u.port)
           end.run
         end
+
+        Thread.new do
+          loop do
+            task = @event_queue.pop
+            task.call
+          end
+        end.run
       end
 
       def close
@@ -73,10 +81,13 @@ module DRb
         @ws = ws
         messages = Messages.new
         @ws.on(:message) do |event|
-          Thread.new do
-            res = messages.recv_message(event.data.pack('C*'))
-            @ws.send(res.bytes)
-          end.run
+          message = event.data
+          message_id = message.shift(36)
+          task = Proc.new do
+            res = messages.recv_message(message.pack('C*'))
+            @ws.send(message_id + res.bytes)
+          end
+          @event_queue.push task
         end
         @queue.push(messages)
       end

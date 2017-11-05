@@ -17,7 +17,7 @@ module DRb
       end
 
       handler = RackApp.handler(uri)
-      callback_handler = handler || StandaloneCallbackHandler.new(uri, config)
+      callback_handler = handler || Handler.new(uri, config)
       ClientSide.new(uri, config, callback_handler)
     end
 
@@ -46,7 +46,7 @@ module DRb
       end
     end
 
-    class StandaloneCallbackHandler
+    class Handler
       def initialize(uri, config)
         @uri = uri
         @config = config
@@ -62,12 +62,9 @@ module DRb
       end
 
       def send(uri, data)
-        it = URI.parse(uri)
-        path = [(it.path=='' ? '/' : it.path), it.query].compact.join('?')
-
         Thread.new do
           EM.run do
-            ws = Faye::WebSocket::Client.new(uri + path)
+            ws = Faye::WebSocket::Client.new(uri)
 
             ws.on :message do |event|
               sio = StrStream.new
@@ -84,7 +81,9 @@ module DRb
               @fiber.resume
             end
 
-            ws.send(data.bytes)
+            ws.on :open do
+              ws.send(data.bytes)
+            end
           end
         end
       end
