@@ -14,6 +14,43 @@ module DRb
       Server.new(uri, config)
     end
 
+    class Server
+      attr_reader :uri
+
+      def initialize(uri, config)
+        @uri = uri
+        @config = config
+        @queue = Thread::Queue.new
+        Faye::WebSocket.load_adapter('thin')
+
+        u = URI.parse(uri)
+        RackApp.register(uri, self)
+
+        if RackApp.config.standalone
+          Thread.new do
+            app = RackApp.new(-> { [400, {}, []] })
+            thin = Rack::Handler.get('thin')
+            thin.run(app, Host: u.host, Port: u.port)
+          end.run
+        end
+      end
+
+      def close
+      end
+
+      def accept
+        ws = @queue.pop
+        ServerSide.new(ws, @config, uri)
+      end
+
+      def on_message(data)
+      end
+
+      def on_session_start(ws)
+        @queue.push(ws)
+      end
+    end
+
     class Messages
       def initialize
         @request_message = Thread::Queue.new
@@ -34,34 +71,24 @@ module DRb
       end
     end
 
-    class Server
+    class ServerSide
       attr_reader :uri
 
-      def initialize(uri, config)
+      def initialize(ws, config, uri)
         @uri = uri
         @config = config
-        @queue = Thread::Queue.new
-        @event_queue = Thread::Queue.new
+        @msg = DRbMessage.new(@config)
+        @ws = ws
 
-        Faye::WebSocket.load_adapter('thin')
-
-        u = URI.parse(uri)
-        RackApp.register(uri, self)
-
-        if RackApp.config.standalone
-          Thread.new do
-            app = RackApp.new(-> { [400, {}, []] })
-            thin = Rack::Handler.get('thin')
-            thin.run(app, Host: u.host, Port: u.port)
-          end.run
-        end
-
-        Thread.new do
-          loop do
-            task = @event_queue.pop
-            task.call
+        @messages = Messages.new
+        @ws.on(:message) do |event|
+          message = event.data
+          sender_id = message.shift(36)
+          EM.defer do
+            res = @messages.recv_message(message.pack('C*'))
+            @ws.send(sender_id + res.bytes)
           end
-        end.run
+        end
       end
 
       def close
@@ -69,46 +96,8 @@ module DRb
         @ws = nil
       end
 
-      def accept
-        messages = @queue.pop
-        ServerSide.new(messages, @config, uri)
-      end
-
-      def on_message(data)
-      end
-
-      def on_session_start(ws)
-        @ws = ws
-        messages = Messages.new
-        @ws.on(:message) do |event|
-          message = event.data
-          message_id = message.shift(36)
-          task = Proc.new do
-            res = messages.recv_message(message.pack('C*'))
-            @ws.send(message_id + res.bytes)
-          end
-          @event_queue.push task
-        end
-        @queue.push(messages)
-      end
-    end
-
-    class ServerSide
-      attr_reader :uri
-
-      def initialize(messages, config, uri)
-        @uri = uri
-        @messages = messages
-        @config = config
-        @msg = DRbMessage.new(@config)
-      end
-
-      def close
-        @messages = nil
-      end
-
       def alive?
-        !!@messages
+        !!@ws
       end
 
       def recv_request
