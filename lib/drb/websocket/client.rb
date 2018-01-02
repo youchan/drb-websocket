@@ -25,12 +25,17 @@ module DRb
       def initialize(uri)
         @uri = uri
         @queue = Thread::Queue.new
+        @sender_id = SecureRandom.uuid
       end
 
       def on_message(data)
-        sio = StrStream.new
-        sio.write(data.pack('C*'))
-        @queue.push sio
+        sender_id = data.shift(36).pack('C*')
+
+        if sender_id == @sender_id
+          sio = StrStream.new
+          sio.write(data.pack('C*'))
+          @queue.push sio
+        end
       end
 
       def on_session_start(ws)
@@ -42,7 +47,7 @@ module DRb
       end
 
       def send(url, data)
-        @ws.send(data.bytes)
+        @ws.send((@sender_id + data).bytes)
       end
     end
 
@@ -51,39 +56,38 @@ module DRb
         @uri = uri
         @config = config
         @queue = Thread::Queue.new
+        @sender_id = SecureRandom.uuid
       end
 
       def stream
         @queue.pop
       end
 
-      def fiber=(fiber)
-        @fiber = fiber
-      end
-
       def send(uri, data)
-        Thread.new do
-          EM.run do
-            ws = Faye::WebSocket::Client.new(uri)
+        EM.run do
+          ws = Faye::WebSocket::Client.new(uri)
 
-            ws.on :message do |event|
-              sio = StrStream.new
-              sio.write(event.data.pack('C*'))
-              @queue.push sio
+          ws.on :message do |event|
+            sio = StrStream.new
+            message = event.data
+            sender_id = message.shift(36).pack('C*')
 
-              if @config[:load_limit] < sio.buf.size
-                raise TypeError, 'too large packet'
-              end
+            next if sender_id != @sender_id
 
-              ws.close
+            sio.write(message.pack('C*'))
+            @queue.push sio
 
-              EM.stop
-              @fiber.resume
+            if @config[:load_limit] < sio.buf.size
+              raise TypeError, 'too large packet'
             end
 
-            ws.on :open do
-              ws.send(data.bytes)
-            end
+            ws.close
+
+            EM.stop
+          end
+
+          ws.on :open do
+            ws.send((@sender_id + data).bytes)
           end
         end
       end
