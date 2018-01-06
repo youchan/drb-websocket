@@ -31,5 +31,6 @@ module DRb
   DRbProtocol.add_protocol(WebSocket)
 end
 
+require 'drb/websocket/ws_client'
 require 'drb/websocket/client'
 require 'drb/websocket/server'

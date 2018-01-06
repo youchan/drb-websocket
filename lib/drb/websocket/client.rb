@@ -59,36 +59,31 @@ module DRb
         @sender_id = SecureRandom.uuid
       end
 
-      def stream
-        @queue.pop
+      def stream(&block)
+        @queue.pop(&block)
       end
 
       def send(uri, data)
-        EM.run do
-          ws = Faye::WebSocket::Client.new(uri)
+        @wsclient = WSClient.new(uri)
+        @wsclient.on(:message) do |event|
+          sio = StrStream.new
+          message = event.data
+          sender_id = message.shift(36).pack('C*')
 
-          ws.on :message do |event|
-            sio = StrStream.new
-            message = event.data
-            sender_id = message.shift(36).pack('C*')
+          next if sender_id != @sender_id
 
-            next if sender_id != @sender_id
+          sio.write(message.pack('C*'))
+          @queue.push sio
 
-            sio.write(message.pack('C*'))
-            @queue.push sio
-
-            if @config[:load_limit] < sio.buf.size
-              raise TypeError, 'too large packet'
-            end
-
-            ws.close
-
-            EM.stop
+          if @config[:load_limit] < sio.buf.size
+            raise TypeError, 'too large packet'
           end
 
-          ws.on :open do
-            ws.send((@sender_id + data).bytes)
-          end
+          @wsclient.close
+        end
+
+        @wsclient.on(:open) do
+          @wsclient.send((@sender_id + data).bytes)
         end
       end
     end
@@ -101,7 +96,6 @@ module DRb
         @msg = DRbMessage.new(config)
         @proxy = ENV['HTTP_PROXY']
         @handler = handler
-        @queue = Thread::Queue.new
       end
 
       def close
@@ -118,10 +112,9 @@ module DRb
       end
 
       def recv_reply
-        @reply_stream = @handler.stream
-
+        reply_stream = @handler.stream
         begin
-          @msg.recv_reply(@reply_stream)
+          @msg.recv_reply(reply_stream)
         rescue
           close
           raise $!
