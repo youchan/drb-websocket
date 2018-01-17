@@ -2,7 +2,10 @@
 module DRb
   module WebSocket
     class WSClient
+      attr_reader :uri
+
       def initialize(uri)
+        @uri = uri
         WSClient.start
 
         @handlers = { open: [], message: [] }

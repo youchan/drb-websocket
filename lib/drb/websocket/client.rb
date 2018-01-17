@@ -16,9 +16,8 @@ module DRb
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
 
-      handler = RackApp.handler(uri)
-      callback_handler = handler || Handler.new(uri, config)
-      ClientSide.new(uri, config, callback_handler)
+      handler = RackApp.handler(uri) || Handler.new(uri, config)
+      ClientSide.new(uri, config, handler)
     end
 
     class CallbackHandler
@@ -46,7 +45,7 @@ module DRb
         @queue.pop
       end
 
-      def send(url, data)
+      def send(uri, data)
         @ws.send((@sender_id + data).bytes)
       end
     end
@@ -66,12 +65,12 @@ module DRb
       def send(uri, data)
         @wsclient = WSClient.new(uri)
         @wsclient.on(:message) do |event|
-          sio = StrStream.new
           message = event.data
           sender_id = message.shift(36).pack('C*')
 
           next if sender_id != @sender_id
 
+          sio = StrStream.new
           sio.write(message.pack('C*'))
           @queue.push sio
 

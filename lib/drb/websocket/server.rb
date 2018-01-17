@@ -11,7 +11,12 @@ module DRb
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
-      Server.new(uri, config)
+
+      if $4 == 'callback'
+        CallbackServer.new(uri, config)
+      else
+        Server.new(uri, config)
+      end
     end
 
     class Server

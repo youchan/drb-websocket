@@ -33,4 +33,5 @@ end
 
 require 'drb/websocket/ws_client'
 require 'drb/websocket/client'
+require 'drb/websocket/callback_server'
 require 'drb/websocket/server'
