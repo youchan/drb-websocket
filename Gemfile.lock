@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    drb-websocket (0.3.2)
+    drb-websocket (0.4.0)
       faye-websocket
       rack
       thin
@@ -15,7 +15,7 @@ GEM
     faye-websocket (0.10.7)
       eventmachine (>= 0.12.0)
       websocket-driver (>= 0.5.1)
-    rack (2.0.3)
+    rack (2.0.4)
     rake (10.5.0)
     rspec (3.7.0)
       rspec-core (~> 3.7.0)
