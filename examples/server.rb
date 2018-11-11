@@ -1,5 +1,5 @@
 require 'drb/drb'
-require 'drb/websocket/server'
+require 'drb/websocket'
 
 class SampleObject
   def test
