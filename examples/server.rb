@@ -5,6 +5,13 @@ class SampleObject
   def test
     "ACK!"
   end
+
+  def set_callback(&callback)
+    5.times do
+      callback.call
+      sleep 1
+    end
+  end
 end
 
 class SampleFactory

@@ -6,8 +6,12 @@ module DRb
       def initialize(uri, config)
         @uri = uri
         @config = config
-        @wsclient = WSClient.new(uri)
         @queue = Thread::Queue.new
+        reconnect
+      end
+
+      def reconnect
+        @wsclient = WSClient.new(uri)
 
         @wsclient.on(:message) do |event|
           message = event.data
@@ -17,13 +21,17 @@ module DRb
       end
 
       def close
-        @wsclient.close
-        @wsclient = nil
+        EM.defer do
+          @wsclient.close
+          @wsclient = nil
+        end
       end
 
       def accept
         (sender_id, message) = @queue.pop
-        ServerSide.new(@wsclient, sender_id, message, @config, @uri)
+        server_side = ServerSide.new(@wsclient, sender_id, message, @config, @uri)
+        reconnect
+        server_side
       end
 
       class ServerSide
