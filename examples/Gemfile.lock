@@ -1,7 +1,7 @@
 PATH
   remote: ..
   specs:
-    drb-websocket (0.4.0)
+    drb-websocket (0.5.0)
       faye-websocket
       rack
       thin
