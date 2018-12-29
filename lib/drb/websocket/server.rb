@@ -97,8 +97,10 @@ module DRb
       end
 
       def close
-        @ws.close
-        @ws = nil
+        EM.defer do
+          @ws.close
+          @ws = nil
+        end
       end
 
       def alive?
