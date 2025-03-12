@@ -1,6 +1,7 @@
 require 'thread'
 require 'rack'
-require 'thin'
+require 'rackup'
+require 'puma'
 require 'faye/websocket'
 
 module DRb
@@ -26,7 +27,7 @@ module DRb
         @uri = uri
         @config = config
         @queue = Thread::Queue.new
-        Faye::WebSocket.load_adapter('thin')
+        Faye::WebSocket.load_adapter('puma')
 
         u = URI.parse(uri)
         RackApp.register(uri, self)
@@ -34,8 +35,7 @@ module DRb
         if RackApp.config.standalone
           Thread.new do
             app = RackApp.new(-> { [400, {}, []] })
-            thin = Rack::Handler.get('thin')
-            thin.run(app, Host: u.host, Port: u.port)
+            Rackup::Server.start app:app, Port: u.port
           end.run
         end
       end
@@ -91,14 +91,18 @@ module DRb
           sender_id = message.shift(36)
           EM.defer do
             res = @messages.recv_message(message.pack('C*'))
-            @ws.send(sender_id + res.bytes)
+            if @ws
+              @ws.send(sender_id + res.bytes)
+            else
+              puts 'Socket is already closed.'
+            end
           end
         end
       end
 
       def close
         EM.defer do
-          @ws.close
+          @ws.close if @ws
           @ws = nil
         end
       end
