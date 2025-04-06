@@ -26,7 +26,8 @@ module DRb
         if Faye::WebSocket.websocket?(env)
           ws = Faye::WebSocket.new(env)
           req = Rack::Request.new(env)
-          uri = "ws://#{req.host}:#{req.port}#{req.path == '/' ? nil : req.path}"
+          scheme = req.scheme == 'https' ? 'wss' : 'ws'
+          uri = "#{scheme}://#{req.host}:#{req.port}#{req.path == '/' ? nil : req.path}"
 
           handler = req.path.start_with?('/callback') ? RackApp.register(uri, CallbackHandler.new(uri)) : RackApp.handler(uri)
           handler.on_session_start(ws)

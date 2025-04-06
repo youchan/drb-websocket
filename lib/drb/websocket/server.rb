@@ -8,7 +8,7 @@ module DRb
   module WebSocket
 
     def self.open_server(uri, config)
-      unless uri =~ /^ws:\/\/(.*?):(\d+)(\/(.*))?$/
+      unless uri =~ /^wss?:\/\/(.*?)(:(\d+))?(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^ws:/
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
