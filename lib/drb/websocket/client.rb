@@ -5,7 +5,7 @@ require 'faye/websocket'
 module DRb
   module WebSocket
     def self.open(uri, config)
-      unless uri =~ /^wss?\/\/(.*?):(\d+)(\/(.*))?$/
+      unless uri =~ /^wss?:\/\/(.*?):(\d+)(\/(.*))?$/
         raise(DRbBadScheme, uri) unless uri =~ /^wss?:/
         raise(DRbBadURI, 'can\'t parse uri: ' + uri)
       end
